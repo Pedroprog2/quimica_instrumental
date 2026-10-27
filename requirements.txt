@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+matplotlib
+pillow
+piexif
+reportlab
+pillow-heif
