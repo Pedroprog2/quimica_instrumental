@@ -88,7 +88,7 @@ def desenhar_espectrofotometro(lambda_val, abs_val):
 with col_painel:
     st.image(desenhar_espectrofotometro(lambda_sel, abs_dinamica), caption="Visor Digital do Espectrofotômetro UV-Vis")
     if lambda_sel == 520:
-        st.success("🎯 **Comprimento de onda ideal ($\lambda_{máx} = 520\text{ nm}$)** selecionado com sucesso!")
+        st.info("💡 Varra o comprimento de onda até encontrar o valor mais alto de Absorbância (ABS).")
     else:
         st.info("💡 Varra o comprimento de onda até encontrar o valor mais alto de Absorbância (ABS).")
 
