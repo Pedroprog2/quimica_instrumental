@@ -135,26 +135,79 @@ def desenhar_balao(vol_total):
     img = Image.new("RGBA", (250, 320), (255, 255, 255, 0))
     draw = ImageDraw.Draw(img)
     
-    # Gargalo e Corpo do Balão (50 mL)
-    silhueta = [(100, 20), (150, 20), (150, 140), (220, 250), (210, 290), (40, 290), (30, 250), (100, 140)]
+    # 1. PARÂMETROS E GEOMETRIA DO BALÃO DE 50 mL
+    # Linha do traço de aferição (50 mL) no gargalo
+    y_menisco_alvo = 110  
+    y_fundo_balao = 285
+    y_juncao_gargalo = 160
     
-    # Cor do líquido baseada na concentração (quanto mais concentrado, mais roxo)
+    # Cor do líquido baseada na concentração (intensidade do roxo/rosa)
     conc_atual = (st.session_state.aliquota_estoque * C_estoque) / max(vol_total, 1.0)
     int_cor = int(min(255, conc_atual * 2.5))
-    cor_liq = (200 - int_cor//2, 50, 180 + int_cor//4, 200)
+    cor_liq = (200 - int_cor//2, 40, 180 + int_cor//4, 210)
 
-    # Nível do Líquido
+    # 2. CÁLCULO E DESENHO DO LÍQUIDO DENTRO DAS PAREDES DO FRASCO
     if vol_total > 0:
-        # Mapeia 50 mL exatamente na linha do menisco (y = 100)
-        y_nivel = max(30, 285 - int(vol_total * 3.7))
-        draw.rectangle([42, y_nivel, 208, 288], fill=cor_liq)
+        # Mapeamento do volume (0 a 50+ mL) para a coordenada Y de altura do líquido
+        if vol_total <= 35.0:
+            # Líquido preenchendo apenas o bojo inferior (base larga)
+            fator_preenchimento = vol_total / 35.0
+            y_nivel = int(y_fundo_balao - (fator_preenchimento * (y_fundo_balao - y_juncao_gargalo)))
+            
+            # Largura dinâmica acompanhando a parede do bojo
+            largura_base = int(85 * (1.0 - (y_nivel - y_juncao_gargalo) / (y_fundo_balao - y_juncao_gargalo)))
+            
+            poligono_liquido = [
+                (125 - largura_base, y_nivel), # Canto superior esquerdo do nível
+                (125 + largura_base, y_nivel), # Canto superior direito do nível
+                (205, 280),                    # Canto inferior direito da base
+                (45, 280)                      # Canto inferior esquerdo da base
+            ]
+            draw.polygon(poligono_liquido, fill=cor_liq)
+            
+        else:
+            # Líquido subindo pelo gargalo fino (Volume > 35 mL até 50+ mL)
+            fator_gargalo = (vol_total - 35.0) / 15.0 # 15 mL sobem no gargalo
+            y_nivel = int(y_juncao_gargalo - (fator_gargalo * (y_juncao_gargalo - y_menisco_alvo)))
+            
+            # 1. Preenche todo o bojo inferior
+            bojo_cheio = [(100, y_juncao_gargalo), (150, y_juncao_gargalo), (205, 280), (45, 280)]
+            draw.polygon(bojo_cheio, fill=cor_liq)
+            
+            # 2. Preenche a coluna do gargalo reto (entre x=105 e x=145)
+            draw.rectangle([105, y_nivel, 145, y_juncao_gargalo], fill=cor_liq)
 
-    # Vidro do Balão
-    draw.polygon(silhueta, outline=(60, 60, 60), width=3)
-    # Linha do Traço de Aferição (Menisco 50 mL)
-    draw.line([100, 100, 150, 100], fill=(255, 0, 0), width=2)
-    draw.text((158, 93), "← Menisco 50 mL", fill=(255, 0, 0))
+        # Menisco curvo no topo do líquido
+        if y_nivel > 30:
+            if vol_total <= 35.0:
+                draw.chord([125 - largura_base, y_nivel - 4, 125 + largura_base, y_nivel + 4], start=0, end=180, fill=cor_liq)
+            else:
+                draw.chord([105, y_nivel - 3, 145, y_nivel + 3], start=0, end=180, fill=cor_liq)
+
+    # 3. VIDRO EXTERNO DO BALÃO VOLUMÉTRICO
+    silhueta_balao = [
+        (100, 20),  # Boca esquerda
+        (150, 20),  # Boca direita
+        (150, 30),  # Anel da boca
+        (145, 30),  # Topo do gargalo direito
+        (145, 160), # Base do gargalo direito
+        (210, 265), # Curva do bojo direito
+        (205, 285), # Canto arredondado direito
+        (45, 285),  # Canto arredondado esquerdo
+        (40, 265),  # Curva do bojo esquerdo
+        (105, 160), # Base do gargalo esquerdo
+        (105, 30),  # Topo do gargalo esquerdo
+        (100, 30),  # Anel da boca esquerdo
+    ]
+    draw.polygon(silhueta_balao, outline=(60, 60, 70), width=3)
     
+    # Base plana do balão de vidro
+    draw.line([(45, 285), (205, 285)], fill=(60, 60, 70), width=3)
+
+    # Traço de Aferição (Menisco Vermelho dos 50 mL)
+    draw.line([95, y_menisco_alvo, 155, y_menisco_alvo], fill=(230, 20, 20), width=2)
+    draw.text((160, y_menisco_alvo - 7), "← 50 mL", fill=(200, 0, 0))
+
     return img
 
 with col_bancada2:
