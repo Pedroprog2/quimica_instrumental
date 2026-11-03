@@ -21,7 +21,7 @@ from reportlab.lib import colors
 
 st.set_page_config(page_title="RPG Laboratório: Padronização de AgNO3", layout="wide")
 
-st.title("🧪 RPG Analítico: Preparo e Padronização de $\text{{AgNO}}_3$")
+st.title("🧪 RPG Analítico: Preparo e Padronização de AgNO₃")
 st.write("Avance pelas fases do laboratório tomando decisões analíticas corretas, pesando na balança e titulando a solução.")
 
 # --- INICIALIZAÇÃO SEGURA DO SESSION STATE (EVITA NameError) ---
@@ -57,7 +57,7 @@ def desenhar_mohr(v_tit, cor_rgb):
     alt_liq = min(178, 30 + int(v_tit * 6))
     draw.rectangle([137, alt_liq, 163, 178], fill=(200, 220, 240, 200))
     draw.rectangle([130, 180, 170, 188], fill="gray")
-    # Erlenmeyer com o viragem de cor
+    # Erlenmeyer com viragem de cor
     erlen = [(150, 230), (110, 260), (70, 320), (230, 320), (190, 260)]
     draw.polygon([(160, 280), (230, 280), (230, 320), (70, 320), (70, 280)], fill=cor_rgb)
     draw.polygon(erlen, outline="black", width=2)
@@ -108,7 +108,7 @@ if not nome_aluno or not matricula_input or not matricula_input.isdigit():
 matricula = int(matricula_input)
 ultimos_2 = matricula % 100
 
-# Parâmetros Químicos Globais (Evita NameError)
+# Parâmetros Químicos Globais
 MM_AgNO3 = 169.87
 MM_NaCl = 58.44
 vol_solucao_preparar = 250.0 
@@ -134,12 +134,12 @@ if st.session_state.fase == 1:
             st.session_state.fase = 2
             st.rerun()
         else:
-            st.error(f"❌ Cálculo incorreto. Revise a conta: $m = C \cdot V \cdot MM$. (Valor esperado em torno de {massa_agno3_teorica} g).")
+            st.error(rf"❌ Cálculo incorreto. Revise a conta: $m = C \cdot V \cdot MM$. (Valor esperado em torno de {massa_agno3_teorica} g).")
 
 # --- FASE 2: BANCADA DE PESAGEM ---
 elif st.session_state.fase == 2:
     st.header("⚖️ FASE 2: Balança Analítica Digital")
-    st.write(f"Adicione $\text{{AgNO}}_3$ ao vidro de relógio até atingir a massa calculada ({massa_agno3_teorica} g).")
+    st.write(f"Adicione AgNO₃ ao vidro de relógio até atingir a massa calculada ({massa_agno3_teorica} g).")
     
     c_bal1, c_bal2 = st.columns([1, 1])
     
@@ -179,7 +179,7 @@ elif st.session_state.fase == 3:
                   ["Selecione...", "Sim, possui massa molar elevada e alta pureza sem necessidade de padronização.",
                    "Não, é higroscópico, fotossensível e sua concentração real deve ser determinada por padronização."])
                    
-    q2 = st.selectbox("2. Qual Padrão Primário deve ser utilizado para padronizar o $\text{{AgNO}}_3$?",
+    q2 = st.selectbox("2. Qual Padrão Primário deve ser utilizado para padronizar o AgNO₃?",
                       ["Selecione...", "Biftalato de Potássio (KHP)", "Cloreto de Sódio (NaCl) previamente seco", "Carbonato de Sódio (Na2CO3)"])
                       
     q3 = st.selectbox("3. Qual o Indicador correto para a Titulação de Precipitação pelo Método de Mohr?",
@@ -201,7 +201,7 @@ elif st.session_state.fase == 4:
     col_t1, col_t2 = st.columns([1, 1])
     
     with col_t1:
-        st.subheader("Controle da Bureta ($\text{{AgNO}}_3$)")
+        st.subheader("Controle da Bureta (AgNO₃)")
         c_b1, c_b2, c_b3 = st.columns(3)
         with c_b1:
             if st.button("➕ 1.0 mL"):
@@ -243,9 +243,9 @@ elif st.session_state.fase == 4:
 elif st.session_state.fase == 5:
     st.header("📝 FASE 5: Equação Química e Resolução Manuscrita")
     
-    st.write(f"Volume do ponto de equivalência lido: **{st.session_state.v_titulante_add} mL de $\text{{AgNO}}_3$**.")
+    st.write(f"Volume do ponto de equivalência lido: **{st.session_state.v_titulante_add} mL de AgNO₃**.")
     st.write("Escreva no papel:")
-    st.markdown("1. A **equação química balanceada** da reação de padronização entre $\text{{AgNO}}_3$ e $\text{NaCl}$.\n2. A **equação da reação indicadora** ($\text{{Ag}}_2\text{{CrO}}_4$).\n3. O cálculo da **concentração real exata** da solução de $\text{{AgNO}}_3$.")
+    st.markdown("1. A **equação química balanceada** da reação de padronização entre AgNO₃ e NaCl.\n2. A **equação da reação indicadora** (Ag₂CrO₄).\n3. O cálculo da **concentração real exata** da solução de AgNO₃.")
     
     file_manuscrito = st.file_uploader("Upload da foto do manuscrito:", type=["jpg", "jpeg", "png", "heic"])
     
