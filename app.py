@@ -201,7 +201,7 @@ elif st.session_state.fase == 4:
     col_t1, col_t2 = st.columns([1, 1])
     
     with col_t1:
-        st.subheader("Controle da Bureta ($\text{AgNO}_3$)")
+        st.subheader("Controle da Bureta ($\text{{AgNO}}_3$)")
         c_b1, c_b2, c_b3 = st.columns(3)
         with c_b1:
             if st.button("➕ 1.0 mL"):
@@ -243,9 +243,9 @@ elif st.session_state.fase == 4:
 elif st.session_state.fase == 5:
     st.header("📝 FASE 5: Equação Química e Resolução Manuscrita")
     
-    st.write(f"Volume do ponto de equivalência lido: **{st.session_state.v_titulante_add} mL de $\text{AgNO}_3$**.")
+    st.write(f"Volume do ponto de equivalência lido: **{st.session_state.v_titulante_add} mL de $\text{{AgNO}}_3$**.")
     st.write("Escreva no papel:")
-    st.markdown("1. A **equação química balanceada** da reação de padronização entre $\text{AgNO}_3$ e $\text{NaCl}$.\n2. A **equação da reação indicadora** ($\text{Ag}_2\text{CrO}_4$).\n3. O cálculo da **concentração real exata** da solução de $\text{AgNO}_3$.")
+    st.markdown("1. A **equação química balanceada** da reação de padronização entre $\text{{AgNO}}_3$ e $\text{NaCl}$.\n2. A **equação da reação indicadora** ($\text{{Ag}}_2\text{{CrO}}_4$).\n3. O cálculo da **concentração real exata** da solução de $\text{{AgNO}}_3$.")
     
     file_manuscrito = st.file_uploader("Upload da foto do manuscrito:", type=["jpg", "jpeg", "png", "heic"])
     
