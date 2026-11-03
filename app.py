@@ -179,7 +179,7 @@ elif st.session_state.fase == 3:
                   ["Selecione...", "Sim, possui massa molar elevada e alta pureza sem necessidade de padronização.",
                    "Não, é higroscópico, fotossensível e sua concentração real deve ser determinada por padronização."])
                    
-    q2 = st.selectbox("2. Qual Padrão Primário deve ser utilizado para padronizar o $\text{AgNO}_3$?",
+    q2 = st.selectbox("2. Qual Padrão Primário deve ser utilizado para padronizar o $\text{{AgNO}}_3$?",
                       ["Selecione...", "Biftalato de Potássio (KHP)", "Cloreto de Sódio (NaCl) previamente seco", "Carbonato de Sódio (Na2CO3)"])
                       
     q3 = st.selectbox("3. Qual o Indicador correto para a Titulação de Precipitação pelo Método de Mohr?",
