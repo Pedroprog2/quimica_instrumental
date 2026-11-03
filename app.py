@@ -24,6 +24,78 @@ st.set_page_config(page_title="RPG Laboratório: Padronização de AgNO3", layou
 st.title("🧪 RPG Analítico: Preparo e Padronização de $\text{AgNO}_3$")
 st.write("Avance pelas fases do laboratório tomando decisões analíticas corretas, pesando na balança e titulando a solução.")
 
+# --- INICIALIZAÇÃO SEGURA DO SESSION STATE (EVITA NameError) ---
+if 'fase' not in st.session_state:
+    st.session_state.fase = 1
+if 'massa_pesada' not in st.session_state:
+    st.session_state.massa_pesada = 0.0
+if 'v_titulante_add' not in st.session_state:
+    st.session_state.v_titulante_add = 0.0
+
+# --- FUNÇÕES AUXILIARES GLOBAIS ---
+def desenhar_balanca(massa):
+    img = Image.new("RGBA", (320, 220), (240, 240, 245, 255))
+    draw = ImageDraw.Draw(img)
+    # Corpinho da Balança
+    draw.rectangle([20, 80, 300, 200], fill=(200, 205, 210), outline=(50, 50, 50), width=3)
+    # Prato da Balança
+    draw.ellipse([90, 65, 230, 85], fill=(150, 150, 160), outline=(0, 0, 0), width=2)
+    # Display LCD Digital
+    draw.rectangle([80, 130, 240, 180], fill=(10, 40, 10), outline=(0, 0, 0), width=2)
+    draw.text((95, 145), f"{massa:.4f} g", fill=(50, 255, 50))
+    # Vidro de Relógio + Sal Branco
+    if massa > 0:
+        draw.ellipse([110, 58, 210, 72], fill=(220, 220, 230, 180), outline=(100, 100, 100))
+        draw.ellipse([140, 60, 180, 68], fill=(255, 255, 255))
+    return img
+
+def desenhar_mohr(v_tit, cor_rgb):
+    img = Image.new("RGBA", (300, 350), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(img)
+    # Bureta
+    draw.rectangle([135, 20, 165, 180], outline="black", width=2)
+    alt_liq = min(178, 30 + int(v_tit * 6))
+    draw.rectangle([137, alt_liq, 163, 178], fill=(200, 220, 240, 200))
+    draw.rectangle([130, 180, 170, 188], fill="gray")
+    # Erlenmeyer com o viragem de cor
+    erlen = [(150, 230), (110, 260), (70, 320), (230, 320), (190, 260)]
+    draw.polygon([(160, 280), (230, 280), (230, 320), (70, 320), (70, 280)], fill=cor_rgb)
+    draw.polygon(erlen, outline="black", width=2)
+    return img
+
+def gerar_pdf_jogo(nome, mat, m_pesada, v_viragem, conc_calc, file_script):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    elements.append(Paragraph("<b>Certificado de Conclusão - RPG Laboratório de Química Analítica</b>", styles['Title']))
+    elements.append(Spacer(1, 10))
+    info = f"<b>Aluno:</b> {nome}<br/><b>Matrícula:</b> {mat}<br/><b>Data:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    elements.append(Paragraph(info, styles['Normal']))
+    elements.append(Spacer(1, 12))
+
+    resumo = f"""
+    <b>Massa Pesada na Balança:</b> {m_pesada} g<br/>
+    <b>Método Escolhido:</b> Argentimetria / Método de Mohr (NaCl + K<sub>2</sub>CrO<sub>4</sub>)<br/>
+    <b>Volume no Ponto de Equivalência:</b> {v_viragem} mL<br/>
+    <b>Concentração Real Determinada:</b> {conc_calc} mol/L
+    """
+    elements.append(Paragraph(resumo, styles['Normal']))
+    elements.append(Spacer(1, 12))
+
+    img_m = Image.open(file_script).convert("RGB")
+    img_m.thumbnail((400, 400))
+    temp_p = f"temp_rpg_{mat}.jpg"
+    img_m.save(temp_p)
+    elements.append(RLImage(temp_p, width=320, height=320))
+
+    doc.build(elements)
+    if os.path.exists(temp_p):
+        os.remove(temp_p)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 # --- 1. IDENTIFICAÇÃO DO ESTUDANTE ---
 st.sidebar.header("Identificação do Aluno")
 nome_aluno = st.sidebar.text_input("Nome Completo:")
@@ -36,25 +108,13 @@ if not nome_aluno or not matricula_input or not matricula_input.isdigit():
 matricula = int(matricula_input)
 ultimos_2 = matricula % 100
 
-# Massa molar AgNO3 = 169.87 g/mol
+# Parâmetros Químicos Globais (Evita NameError)
 MM_AgNO3 = 169.87
 MM_NaCl = 58.44
-
-# Parâmetros individualizados da missão
-vol_solucao_preparar = 250.0 # mL
-conc_alvo_agno3 = round(0.010 + (ultimos_2 * 0.0005), 4) # mol/L
+vol_solucao_preparar = 250.0 
+conc_alvo_agno3 = round(0.010 + (ultimos_2 * 0.0005), 4) 
 massa_agno3_teorica = round(conc_alvo_agno3 * (vol_solucao_preparar / 1000.0) * MM_AgNO3, 4)
-
-# Volume de equivalência para padronização contra alíquota de 10 mL de NaCl 0.010 mol/L
 v_equiv_padronizacao = round((10.0 * 0.010) / conc_alvo_agno3, 2)
-
-# --- GERENCIAMENTO DE FASES DO JOGO (SESSION STATE) ---
-if 'fase' not in st.session_state:
-    st.session_state.fase = 1
-if 'massa_pesada' not in st.session_state:
-    st.session_state.massa_pesada = 0.0
-if 'v_titulante_add' not in st.session_state:
-    st.session_state.v_titulante_add = 0.0
 
 # --- FASE 1: O DESAFIO DO DIA ---
 if st.session_state.fase == 1:
@@ -74,9 +134,9 @@ if st.session_state.fase == 1:
             st.session_state.fase = 2
             st.rerun()
         else:
-            st.error(f"❌ Cálculo incorreto. Revise a conta: $m = C \cdot V \cdot MM$. (Dica: esperado em torno de {massa_agno3_teorica} g).")
+            st.error(f"❌ Cálculo incorreto. Revise a conta: $m = C \cdot V \cdot MM$. (Valor esperado em torno de {massa_agno3_teorica} g).")
 
-# --- FASE 2: BANCADA DE PESAGEM (BALANÇA ANALÍTICA) ---
+# --- FASE 2: BANCADA DE PESAGEM ---
 elif st.session_state.fase == 2:
     st.header("⚖️ FASE 2: Balança Analítica Digital")
     st.write(f"Adicione $\text{AgNO}_3$ ao vidro de relógio até atingir a massa calculada ({massa_agno3_teorica} g).")
@@ -89,31 +149,15 @@ elif st.session_state.fase == 2:
         with col_m1:
             if st.button("➕ 0.100 g"):
                 st.session_state.massa_pesada = round(st.session_state.massa_pesada + 0.100, 4)
-        with c_bal2:
+        with col_m2:
             if st.button("➕ 0.010 g"):
                 st.session_state.massa_pesada = round(st.session_state.massa_pesada + 0.010, 4)
-        with c_bal3:
+        with col_m3:
             if st.button("➕ 0.001 g"):
                 st.session_state.massa_pesada = round(st.session_state.massa_pesada + 0.001, 4)
                 
         if st.button("🧹 Tarar / Zerar Balança"):
             st.session_state.massa_pesada = 0.0
-            
-    def desenhar_balanca(massa):
-        img = Image.new("RGBA", (320, 220), (240, 240, 245, 255))
-        draw = ImageDraw.Draw(img)
-        # Corpinho da Balança
-        draw.rectangle([20, 80, 300, 200], fill=(200, 205, 210), outline=(50, 50, 50), width=3)
-        # Prato da Balança
-        draw.ellipse([90, 65, 230, 85], fill=(150, 150, 160), outline=(0, 0, 0), width=2)
-        # Display LCD Digital
-        draw.rectangle([80, 130, 240, 180], fill=(10, 40, 10), outline=(0, 0, 0), width=2)
-        draw.text((95, 145), f"{massa:.4f} g", fill=(50, 255, 50))
-        # Vidro de Relógio + Sal Branco
-        if massa > 0:
-            draw.ellipse([110, 58, 210, 72], fill=(220, 220, 230, 180), outline=(100, 100, 100))
-            draw.ellipse([140, 60, 180, 68], fill=(255, 255, 255))
-        return img
 
     with c_bal2:
         st.image(desenhar_balanca(st.session_state.massa_pesada), caption="Balança Analítica com Vidro de Relógio")
@@ -126,7 +170,7 @@ elif st.session_state.fase == 2:
         else:
             st.error("A massa pesada na balança está muito distante do valor correto. Ajuste com a espátula!")
 
-# --- FASE 3: DECISÃO ANALÍTICA E SELEÇÃO DE REAGENTES ---
+# --- FASE 3: DECISÃO ANALÍTICA ---
 elif st.session_state.fase == 3:
     st.header("🧠 FASE 3: Tomada de Decisão Analítica")
     st.write("Responda às questões técnicas sobre o comportamento do reagente para prosseguir:")
@@ -149,7 +193,7 @@ elif st.session_state.fase == 3:
         else:
             st.error("❌ Uma ou mais escolhas teóricas estão incorretas. Lembre-se: argentimetria direta exige NaCl e Cromato de Potássio!")
 
-# --- FASE 4: BANCADA DE TITULAÇÃO (MÉTODO DE MOHR) ---
+# --- FASE 4: TITULAÇÃO ---
 elif st.session_state.fase == 4:
     st.header("🔬 FASE 4: Titulação Argentimétrica (Método de Mohr)")
     st.write("Titule uma alíquota de **10.0 mL de NaCl 0.010 mol/L** + indicador $\text{K}_2\text{CrO}_4$ adicionando $\text{AgNO}_3$ da bureta:")
@@ -172,51 +216,36 @@ elif st.session_state.fase == 4:
         v_add = st.session_state.v_titulante_add
         st.write(f"Volume adicionado: **{v_add:.2f} mL**")
         
-        # Mudança de cor: Amarelo (antes da viragem) -> Vermelho-Tijolo (precipitado Ag2CrO4)
         delta = v_add - v_equiv_padronizacao
         if delta < -0.2:
-            cor_sol = (240, 230, 80, 230) # Amarelo solução cromato
-            estado = "🟡 Solução Amarela Amarelada (Precipitado branco de AgCl formando)"
+            cor_sol = (240, 230, 80, 230)
+            estado = "🟡 Solução Amarela (Precipitado branco de AgCl formando)"
         elif -0.2 <= delta <= 0.2:
-            cor_sol = (210, 100, 50, 240) # Vermelho-Tijolo pálido (viragem!)
+            cor_sol = (210, 100, 50, 240)
             estado = "🧱 VIRAGEM! Precipitado Vermelho-Tijolo de Ag2CrO4 detectado!"
         else:
-            cor_sol = (170, 30, 20, 255) # Excesso de Ag2CrO4
+            cor_sol = (170, 30, 20, 255)
             estado = "🔴 Excesso de Titulante (Supertitulado)"
             
         st.info(f"**Aspecto Visual:** {estado}")
 
-    def desenhar_mohr(v_tit, cor_rgb):
-        img = Image.new("RGBA", (300, 350), (255, 255, 255, 0))
-        draw = ImageDraw.Draw(img)
-        # Bureta
-        draw.rectangle([135, 20, 165, 180], outline="black", width=2)
-        alt_liq = min(178, 30 + int(v_tit * 6))
-        draw.rectangle([137, alt_liq, 163, 178], fill=(200, 220, 240, 200))
-        draw.rectangle([130, 180, 170, 188], fill="gray")
-        # Erlenmeyer com o viragem de cor
-        erlen = [(150, 230), (110, 260), (70, 320), (230, 320), (190, 260)]
-        draw.polygon([(160, 280), (230, 280), (230, 320), (70, 320), (70, 280)], fill=cor_rgb)
-        draw.polygon(erlen, outline="black", width=2)
-        return img
-
     with col_t2:
-        st.image(desenhar_mohr(v_add, cor_sol), caption="Viragem do Método de Mohr")
+        st.image(desenhar_mohr(st.session_state.v_titulante_add, cor_sol), caption="Viragem do Método de Mohr")
         
     if st.button("Registrar Volume de Viragem e Ir para Cálculos ➡️"):
-        if v_add > 0:
+        if st.session_state.v_titulante_add > 0:
             st.session_state.fase = 5
             st.rerun()
         else:
             st.error("Adicione titulante da bureta para observar a viragem antes de prosseguir.")
 
-# --- FASE 5: REAÇÃO QUÍMICA, MANUSCRITO E SUBMISSÃO ---
+# --- FASE 5: REAÇÃO QUÍMICA E CÁLCULOS ---
 elif st.session_state.fase == 5:
     st.header("📝 FASE 5: Equação Química e Resolução Manuscrita")
     
     st.write(f"Volume do ponto de equivalência lido: **{st.session_state.v_titulante_add} mL de $\text{AgNO}_3$**.")
     st.write("Escreva no papel:")
-    st.markdown("1. A **equação química balanceada** da reação de padronização entre $\text{AgNO}_3$ e $\text{NaCl}$.\n2. A **equação da reação indicadora** (formação do precipitado vermelho de $\text{Ag}_2\text{CrO}_4$).\n3. O cálculo da **concentração real exata** da solução de $\text{AgNO}_3$.")
+    st.markdown("1. A **equação química balanceada** da reação de padronização entre $\text{AgNO}_3$ e $\text{NaCl}$.\n2. A **equação da reação indicadora** ($\text{Ag}_2\text{CrO}_4$).\n3. O cálculo da **concentração real exata** da solução de $\text{AgNO}_3$.")
     
     file_manuscrito = st.file_uploader("Upload da foto do manuscrito:", type=["jpg", "jpeg", "png", "heic"])
     
@@ -229,39 +258,6 @@ elif st.session_state.fase == 5:
             conc_real_aluno = st.number_input("Concentração Real Calculada de AgNO3 (mol/L):", format="%.5f")
         with c2:
             eq_aluno = st.text_input("Escreva a Equação Química Global (ex: AgNO3 + NaCl -> ...):")
-            
-        def gerar_pdf_jogo(nome, mat, m_pesada, v_viragem, conc_calc, file_script):
-            buffer = io.BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-            elements = []
-            styles = getSampleStyleSheet()
-
-            elements.append(Paragraph("<b>Certificado de Conclusão - RPG Laboratório de Química Analítica</b>", styles['Title']))
-            elements.append(Spacer(1, 10))
-            info = f"<b>Aluno:</b> {nome}<br/><b>Matrícula:</b> {mat}<br/><b>Data:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-            elements.append(Paragraph(info, styles['Normal']))
-            elements.append(Spacer(1, 12))
-
-            resumo = f"""
-            <b>Massa Pesada na Balança:</b> {m_pesada} g<br/>
-            <b>Método Escolhido:</b> Argentimetria / Método de Mohr (NaCl + K<sub>2</sub>CrO<sub>4</sub>)<br/>
-            <b>Volume no Ponto de Equivalência:</b> {v_viragem} mL<br/>
-            <b>Concentração Real Determinada:</b> {conc_calc} mol/L
-            """
-            elements.append(Paragraph(resumo, styles['Normal']))
-            elements.append(Spacer(1, 12))
-
-            img_m = Image.open(file_script).convert("RGB")
-            img_m.thumbnail((400, 400))
-            temp_p = f"temp_rpg_{mat}.jpg"
-            img_m.save(temp_p)
-            elements.append(RLImage(temp_p, width=320, height=320))
-
-            doc.build(elements)
-            if os.path.exists(temp_p):
-                os.remove(temp_p)
-            buffer.seek(0)
-            return buffer.getvalue()
 
         if st.button("🏆 Finalizar Missão e Enviar Atividade"):
             pdf_bytes = gerar_pdf_jogo(nome_aluno, matricula, st.session_state.massa_pesada, st.session_state.v_titulante_add, conc_real_aluno, file_manuscrito)
