@@ -139,7 +139,7 @@ if st.session_state.fase == 1:
 # --- FASE 2: BANCADA DE PESAGEM ---
 elif st.session_state.fase == 2:
     st.header("⚖️ FASE 2: Balança Analítica Digital")
-    st.write(f"Adicione $\text{AgNO}_3$ ao vidro de relógio até atingir a massa calculada ({massa_agno3_teorica} g).")
+    st.write(f"Adicione $\text{{AgNO}}_3$ ao vidro de relógio até atingir a massa calculada ({massa_agno3_teorica} g).")
     
     c_bal1, c_bal2 = st.columns([1, 1])
     
