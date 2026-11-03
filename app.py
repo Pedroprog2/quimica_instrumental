@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import piexif
 from datetime import datetime
 import os
@@ -19,10 +19,10 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RL
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-st.set_page_config(page_title="Laboratório Virtual 3D/2D - Espectrofotometria", layout="wide")
+st.set_page_config(page_title="RPG Laboratório: Padronização de AgNO3", layout="wide")
 
-st.title("🧪 Laboratório Virtual: Espectrofotometria e Preparo de Soluções")
-st.write("Opere o espectrofotômetro, prepare as diluições na bancada virtual e determine a concentração da sua amostra individual.")
+st.title("🧪 RPG Analítico: Preparo e Padronização de $\text{AgNO}_3$")
+st.write("Avance pelas fases do laboratório tomando decisões analíticas corretas, pesando na balança e titulando a solução.")
 
 # --- 1. IDENTIFICAÇÃO DO ESTUDANTE ---
 st.sidebar.header("Identificação do Aluno")
@@ -30,310 +30,244 @@ nome_aluno = st.sidebar.text_input("Nome Completo:")
 matricula_input = st.sidebar.text_input("Matrícula (apenas números):")
 
 if not nome_aluno or not matricula_input or not matricula_input.isdigit():
-    st.warning("⚠️ Preencha seu nome e matrícula na barra lateral para iniciar a bancada do laboratório.")
+    st.warning("⚠️ Digite seu nome e matrícula na barra lateral para iniciar o jogo de laboratório.")
     st.stop()
 
 matricula = int(matricula_input)
 ultimos_2 = matricula % 100
 
-# --- ESTADOS DA SESSÃO (PERSISTÊNCIA DE DADOS DO SIMULADOR) ---
-if 'volume_balaum' not in st.session_state:
-    st.session_state.volume_balaum = 0.0  # mL de solução + água no balão
-if 'aliquota_estoque' not in st.session_state:
-    st.session_state.aliquota_estoque = 0.0 # mL de Solução Mãe adicionada
-if 'padroes_preparados' not in st.session_state:
-    st.session_state.padroes_preparados = [] # Tabela de padrões criados pelo aluno
+# Massa molar AgNO3 = 169.87 g/mol
+MM_AgNO3 = 169.87
+MM_NaCl = 58.44
 
-# Concentração da Solução Mãe
-C_estoque = 100.0 # mg/L
+# Parâmetros individualizados da missão
+vol_solucao_preparar = 250.0 # mL
+conc_alvo_agno3 = round(0.010 + (ultimos_2 * 0.0005), 4) # mol/L
+massa_agno3_teorica = round(conc_alvo_agno3 * (vol_solucao_preparar / 1000.0) * MM_AgNO3, 4)
 
-# Concentração real da amostra individualizada baseada na matrícula
-conc_amostra_gabarito = round(12.0 + (ultimos_2 * 0.25), 2)
-abs_amostra_gabarito = round(0.022 * conc_amostra_gabarito + 0.012, 3)
+# Volume de equivalência para padronização contra alíquota de 10 mL de NaCl 0.010 mol/L
+v_equiv_padronizacao = round((10.0 * 0.010) / conc_alvo_agno3, 2)
 
-# --- ABA 1: VARREDURA E AJUSTE DO COMPRIMENTO DE ONDA ---
-st.header("1. Operação do Espectrofotômetro: Determinação de $\lambda_{máx}$")
-st.write("Ajuste o botão do comprimento de onda no visor do equipamento e encontre a absorbância máxima para a amostra:")
+# --- GERENCIAMENTO DE FASES DO JOGO (SESSION STATE) ---
+if 'fase' not in st.session_state:
+    st.session_state.fase = 1
+if 'massa_pesada' not in st.session_state:
+    st.session_state.massa_pesada = 0.0
+if 'v_titulante_add' not in st.session_state:
+    st.session_state.v_titulante_add = 0.0
 
-col_equip, col_painel = st.columns([1, 1])
-
-with col_equip:
-    lambda_sel = st.slider("Ajuste do Comprimento de Onda ($\lambda$ em nm):", min_value=400, max_value=700, value=450, step=5)
-
-# Equação Gaussiana para calcular a absorbância realista em tempo real
-abs_dinamica = round(0.75 * np.exp(-((lambda_sel - 520) ** 2) / (2 * 28 ** 2)) + 0.015, 3)
-
-def desenhar_espectrofotometro(lambda_val, abs_val):
-    img = Image.new("RGBA", (350, 220), (230, 230, 235, 255))
-    draw = ImageDraw.Draw(img)
+# --- FASE 1: O DESAFIO DO DIA ---
+if st.session_state.fase == 1:
+    st.header("📋 FASE 1: A Missão Analítica")
+    st.info(f"""
+    **Desafio de Laboratório:**
+    Você precisa preparar exatamente **{vol_solucao_preparar} mL** de uma solução de Nitrato de Prata ($\text{AgNO}_3$) com concentração aproximada de **{conc_alvo_agno3} mol/L**.
     
-    # Carcaça do Equipamento
-    draw.rectangle([10, 10, 340, 210], outline=(80, 80, 90), fill=(210, 215, 220), width=3)
-    # Compartimento de Cubetas (Tampa)
-    draw.rectangle([30, 30, 110, 110], outline=(50, 50, 50), fill=(100, 100, 100), width=2)
-    draw.text((38, 65), "CUBETA", fill=(255, 255, 255))
+    *Massa Molar do $\text{AgNO}_3$ = {MM_AgNO3} g/mol*
+    """)
     
-    # Visor Digital (Display LCD)
-    draw.rectangle([140, 30, 320, 100], fill=(10, 40, 10), outline=(0, 0, 0), width=2)
-    draw.text((150, 40), f"WL: {lambda_val} nm", fill=(50, 255, 50))
-    draw.text((150, 65), f"ABS: {abs_val:.3f} A", fill=(50, 255, 50))
+    massa_calc = st.number_input("Digite a massa (em gramas) que você deve pesar na balança analítica:", format="%.4f")
     
-    # Botões Físicos
-    draw.ellipse([160, 130, 190, 160], fill=(180, 50, 50)) # Power
-    draw.ellipse([210, 130, 240, 160], fill=(70, 70, 70)) # Zero/Blank
-    draw.ellipse([260, 130, 290, 160], fill=(70, 70, 70)) # Mode
-    
-    return img
-
-with col_painel:
-    st.image(desenhar_espectrofotometro(lambda_sel, abs_dinamica), caption="Visor Digital do Espectrofotômetro UV-Vis")
-    if lambda_sel == 520:
-        st.info("💡 Varra o comprimento de onda até encontrar o valor mais alto de Absorbância (ABS).")
-    else:
-        st.info("💡 Varra o comprimento de onda até encontrar o valor mais alto de Absorbância (ABS).")
-
-st.divider()
-
-# --- ABA 2: BANCADA VIRTUAL DE PREPARO DE SOLUÇÕES (DILUIÇÃO) ---
-st.header("2. Bancada Virtual de Diluição e Preparo dos Padrões")
-st.write("Prepare suas soluções padrão no **Balão Volumétrico de 50 mL** a partir da **Solução Mãe (100 mg/L)**.")
-
-col_bancada1, col_bancada2 = st.columns([1, 1])
-
-with col_bancada1:
-    st.subheader("Ações do Laboratório")
-    
-    # 1. Adicionar Alíquota do Estoque
-    aliquota_add = st.number_input("Pipetar Alíquota da Solução Mãe (mL):", min_value=0.0, max_value=25.0, value=5.0, step=1.0)
-    if st.button("🧪 Transferir Alíquota para o Balão"):
-        if st.session_state.volume_balaum == 0:
-            st.session_state.aliquota_estoque = aliquota_add
-            st.session_state.volume_balaum = aliquota_add
-            st.success(f"{aliquota_add} mL de Solução Mãe adicionados ao balão.")
+    if st.button("Ir para a Bancada de Pesagem ➡️"):
+        if abs(massa_calc - massa_agno3_teorica) < 0.005:
+            st.success("✨ Cálculo de massa exato! Indo para a balança analítica...")
+            st.session_state.fase = 2
+            st.rerun()
         else:
-            st.error("Lave o balão antes de iniciar um novo preparo!")
+            st.error(f"❌ Cálculo incorreto. Revise a conta: $m = C \cdot V \cdot MM$. (Dica: esperado em torno de {massa_agno3_teorica} g).")
 
-    # 2. Adicionar Água Destilada
-    st.markdown("**Adicionar Água Destilada para Aferir o Menisco:**")
-    c_água1, c_água2, c_água3 = st.columns(3)
-    with c_água1:
-        if st.button("➕ 10 mL Água"):
-            st.session_state.volume_balaum += 10.0
-    with c_água2:
-        if st.button("➕ 1.0 mL Água"):
-            st.session_state.volume_balaum += 1.0
-    with c_água3:
-        if st.button("💧 Gota a Gota (0.1 mL)"):
-            st.session_state.volume_balaum = round(st.session_state.volume_balaum + 0.1, 2)
-
-    if st.button("🧼 Lavar / Esvaziar Balão"):
-        st.session_state.volume_balaum = 0.0
-        st.session_state.aliquota_estoque = 0.0
-
-# Desenho dinâmico do Balão Volumétrico
-def desenhar_balao(vol_total):
-    img = Image.new("RGBA", (250, 320), (255, 255, 255, 0))
-    draw = ImageDraw.Draw(img)
+# --- FASE 2: BANCADA DE PESAGEM (BALANÇA ANALÍTICA) ---
+elif st.session_state.fase == 2:
+    st.header("⚖️ FASE 2: Balança Analítica Digital")
+    st.write(f"Adicione $\text{AgNO}_3$ ao vidro de relógio até atingir a massa calculada ({massa_agno3_teorica} g).")
     
-    # 1. PARÂMETROS E GEOMETRIA DO BALÃO DE 50 mL
-    # Linha do traço de aferição (50 mL) no gargalo
-    y_menisco_alvo = 110  
-    y_fundo_balao = 285
-    y_juncao_gargalo = 160
+    c_bal1, c_bal2 = st.columns([1, 1])
     
-    # Cor do líquido baseada na concentração (intensidade do roxo/rosa)
-    conc_atual = (st.session_state.aliquota_estoque * C_estoque) / max(vol_total, 1.0)
-    int_cor = int(min(255, conc_atual * 2.5))
-    cor_liq = (200 - int_cor//2, 40, 180 + int_cor//4, 210)
+    with c_bal1:
+        st.subheader("Operação da Espátula")
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            if st.button("➕ 0.100 g"):
+                st.session_state.massa_pesada = round(st.session_state.massa_pesada + 0.100, 4)
+        with c_bal2:
+            if st.button("➕ 0.010 g"):
+                st.session_state.massa_pesada = round(st.session_state.massa_pesada + 0.010, 4)
+        with c_bal3:
+            if st.button("➕ 0.001 g"):
+                st.session_state.massa_pesada = round(st.session_state.massa_pesada + 0.001, 4)
+                
+        if st.button("🧹 Tarar / Zerar Balança"):
+            st.session_state.massa_pesada = 0.0
+            
+    def desenhar_balanca(massa):
+        img = Image.new("RGBA", (320, 220), (240, 240, 245, 255))
+        draw = ImageDraw.Draw(img)
+        # Corpinho da Balança
+        draw.rectangle([20, 80, 300, 200], fill=(200, 205, 210), outline=(50, 50, 50), width=3)
+        # Prato da Balança
+        draw.ellipse([90, 65, 230, 85], fill=(150, 150, 160), outline=(0, 0, 0), width=2)
+        # Display LCD Digital
+        draw.rectangle([80, 130, 240, 180], fill=(10, 40, 10), outline=(0, 0, 0), width=2)
+        draw.text((95, 145), f"{massa:.4f} g", fill=(50, 255, 50))
+        # Vidro de Relógio + Sal Branco
+        if massa > 0:
+            draw.ellipse([110, 58, 210, 72], fill=(220, 220, 230, 180), outline=(100, 100, 100))
+            draw.ellipse([140, 60, 180, 68], fill=(255, 255, 255))
+        return img
 
-    # 2. CÁLCULO E DESENHO DO LÍQUIDO DENTRO DAS PAREDES DO FRASCO
-    if vol_total > 0:
-        # Mapeamento do volume (0 a 50+ mL) para a coordenada Y de altura do líquido
-        if vol_total <= 35.0:
-            # Líquido preenchendo apenas o bojo inferior (base larga)
-            fator_preenchimento = vol_total / 35.0
-            y_nivel = int(y_fundo_balao - (fator_preenchimento * (y_fundo_balao - y_juncao_gargalo)))
-            
-            # Largura dinâmica acompanhando a parede do bojo
-            largura_base = int(85 * (1.0 - (y_nivel - y_juncao_gargalo) / (y_fundo_balao - y_juncao_gargalo)))
-            
-            poligono_liquido = [
-                (125 - largura_base, y_nivel), # Canto superior esquerdo do nível
-                (125 + largura_base, y_nivel), # Canto superior direito do nível
-                (205, 280),                    # Canto inferior direito da base
-                (45, 280)                      # Canto inferior esquerdo da base
-            ]
-            draw.polygon(poligono_liquido, fill=cor_liq)
-            
+    with c_bal2:
+        st.image(desenhar_balanca(st.session_state.massa_pesada), caption="Balança Analítica com Vidro de Relógio")
+        
+    if st.button("Dissolver, Aferir Balão de 250 mL e Avançar ➡️"):
+        if abs(st.session_state.massa_pesada - massa_agno3_teorica) < 0.002:
+            st.success("Massa pesada com precisão analítica! Solução preparada no balão volumétrico.")
+            st.session_state.fase = 3
+            st.rerun()
         else:
-            # Líquido subindo pelo gargalo fino (Volume > 35 mL até 50+ mL)
-            fator_gargalo = (vol_total - 35.0) / 15.0 # 15 mL sobem no gargalo
-            y_nivel = int(y_juncao_gargalo - (fator_gargalo * (y_juncao_gargalo - y_menisco_alvo)))
-            
-            # 1. Preenche todo o bojo inferior
-            bojo_cheio = [(100, y_juncao_gargalo), (150, y_juncao_gargalo), (205, 280), (45, 280)]
-            draw.polygon(bojo_cheio, fill=cor_liq)
-            
-            # 2. Preenche a coluna do gargalo reto (entre x=105 e x=145)
-            draw.rectangle([105, y_nivel, 145, y_juncao_gargalo], fill=cor_liq)
+            st.error("A massa pesada na balança está muito distante do valor correto. Ajuste com a espátula!")
 
-        # Menisco curvo no topo do líquido
-        if y_nivel > 30:
-            if vol_total <= 35.0:
-                draw.chord([125 - largura_base, y_nivel - 4, 125 + largura_base, y_nivel + 4], start=0, end=180, fill=cor_liq)
-            else:
-                draw.chord([105, y_nivel - 3, 145, y_nivel + 3], start=0, end=180, fill=cor_liq)
-
-    # 3. VIDRO EXTERNO DO BALÃO VOLUMÉTRICO
-    silhueta_balao = [
-        (100, 20),  # Boca esquerda
-        (150, 20),  # Boca direita
-        (150, 30),  # Anel da boca
-        (145, 30),  # Topo do gargalo direito
-        (145, 160), # Base do gargalo direito
-        (210, 265), # Curva do bojo direito
-        (205, 285), # Canto arredondado direito
-        (45, 285),  # Canto arredondado esquerdo
-        (40, 265),  # Curva do bojo esquerdo
-        (105, 160), # Base do gargalo esquerdo
-        (105, 30),  # Topo do gargalo esquerdo
-        (100, 30),  # Anel da boca esquerdo
-    ]
-    draw.polygon(silhueta_balao, outline=(60, 60, 70), width=3)
+# --- FASE 3: DECISÃO ANALÍTICA E SELEÇÃO DE REAGENTES ---
+elif st.session_state.fase == 3:
+    st.header("🧠 FASE 3: Tomada de Decisão Analítica")
+    st.write("Responda às questões técnicas sobre o comportamento do reagente para prosseguir:")
     
-    # Base plana do balão de vidro
-    draw.line([(45, 285), (205, 285)], fill=(60, 60, 70), width=3)
-
-    # Traço de Aferição (Menisco Vermelho dos 50 mL)
-    draw.line([95, y_menisco_alvo, 155, y_menisco_alvo], fill=(230, 20, 20), width=2)
-    draw.text((160, y_menisco_alvo - 7), "← 50 mL", fill=(200, 0, 0))
-
-    return img
-
-with col_bancada2:
-    st.image(desenhar_balao(st.session_state.volume_balaum), caption="Balão Volumétrico de 50 mL")
-    v_tot = st.session_state.volume_balaum
-    st.write(f"**Volume atual no balão:** `{v_tot:.1f} / 50.0 mL`")
-    
-    # Validação do Menisco
-    if abs(v_tot - 50.0) < 0.05:
-        st.success("✨ **Perfeito! O menisco foi aferido exatamente em 50.0 mL!**")
-        c_calc = round((st.session_state.aliquota_estoque * C_estoque) / 50.0, 2)
-        st.info(f"Concentração da solução preparada: **{c_calc} mg/L**")
-        
-        if st.button("💾 Salvar Solução na Tabela de Padrões"):
-            # Calcula absorbância da solução criada com leve ruído
-            abs_padrao = round(0.022 * c_calc + 0.012 + np.random.normal(0, 0.004), 3)
-            st.session_state.padroes_preparados.append({
-                "Solução": f"Padrão {len(st.session_state.padroes_preparados) + 1}",
-                "Alíquota (mL)": st.session_state.aliquota_estoque,
-                "Concentração (mg/L)": c_calc,
-                "Absorbância (A)": abs_padrao
-            })
-            st.success("Solução registrada!")
-    elif v_tot > 50.0:
-        st.error("❌ **Você passou do menisco!** A solução foi diluída além do volume do balão. Clique em 'Lavar / Esvaziar Balão' para tentar novamente.")
-
-st.divider()
-
-# --- ABA 3: LEITURA FINAL E TRANSCRIÇÃO ---
-st.header("3. Leituras Registradas e Amostra Desconhecida")
-
-if len(st.session_state.padroes_preparados) > 0:
-    df_padroes = pd.DataFrame(st.session_state.padroes_preparados)
-    st.subheader("Sua Tabela de Padrões Preparados")
-    st.table(df_padroes)
-else:
-    st.warning("⚠️ Você ainda não preparou e salvou nenhuma solução padrão na bancada virtual acima.")
-
-st.subheader("🧪 Sua Amostra Desconhecida")
-st.info(f"**Absorbância Lida no Espectrofotômetro ($A_{{amostra}}$):** `{abs_amostra_gabarito}` (Valor exclusivo da sua matrícula)")
-
-st.divider()
-
-# --- ABA 4: CÁLCULOS E SUBMISSÃO DO MANUSCRITO ---
-st.header("4. Resolução Manuscrita e Submissão")
-st.write("Com os dados da sua tabela de padrões e da amostra desconhecida, construa a Curva de Calibração e envie seu manuscrito:")
-
-file_manuscrito = st.file_uploader("Envie a foto dos cálculos manuscritos e do gráfico:", type=["jpg", "jpeg", "png", "heic"])
-
-if file_manuscrito:
-    img_m = Image.open(file_manuscrito)
-    st.image(img_m, caption="Manuscrito Registrado", width=350)
-    
-    st.subheader("Transcrição dos Resultados Calculados")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        slope_aluno = st.number_input("Inclinação ($a$):", format="%.5f")
-    with c2:
-        intercept_aluno = st.number_input("Intercepto ($b$):", format="%.5f")
-    with c3:
-        r2_aluno = st.number_input("Coeficiente $R^2$:", format="%.4f")
-    with c4:
-        conc_aluno = st.number_input("Concentração Calculada ($mg/L$):", format="%.2f")
-
-    # --- GERADOR DE PDF ---
-    def gerar_pdf_simulador(nome, mat, df_p, abs_amostra, slope, intercept, r2, conc, file_script):
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-        elements = []
-        styles = getSampleStyleSheet()
-
-        elements.append(Paragraph("<b>Relatório do Laboratório Virtual de Espectrofotometria</b>", styles['Title']))
-        elements.append(Spacer(1, 10))
-        
-        info = f"<b>Aluno:</b> {nome}<br/><b>Matrícula:</b> {mat}<br/><b>Data/Hora:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-        elements.append(Paragraph(info, styles['Normal']))
-        elements.append(Spacer(1, 12))
-
-        # Tabela dos Padrões
-        data_pdf = [["Solução", "Alíquota (mL)", "Conc. (mg/L)", "Absorbância (A)"]]
-        for _, row in df_p.iterrows():
-            data_pdf.append([str(row["Solução"]), str(row["Alíquota (mL)"]), str(row["Concentração (mg/L)"]), str(row["Absorbância (A)"])])
-        
-        t = Table(data_pdf, colWidths=[100, 100, 100, 100])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('GRID', (0,0), (-1,-1), 1, colors.black)
-        ]))
-        elements.append(t)
-        elements.append(Spacer(1, 12))
-
-        res = f"""
-        <b>Absorbância da Amostra:</b> {abs_amostra}<br/>
-        <b>Reta Calculada pelo Aluno:</b> A = {slope} &middot; C + {intercept}<br/>
-        <b>R<sup>2</sup>:</b> {r2} | <b>Concentração Final Obtida:</b> {conc} mg/L
-        """
-        elements.append(Paragraph(res, styles['Normal']))
-        elements.append(Spacer(1, 12))
-
-        # Inserção da foto do manuscrito
-        img_m_pdf = Image.open(file_script).convert("RGB")
-        img_m_pdf.thumbnail((400, 400))
-        temp_path = f"temp_lab_{mat}.jpg"
-        img_m_pdf.save(temp_path)
-        
-        elements.append(RLImage(temp_path, width=320, height=320))
-
-        doc.build(elements)
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-            
-        buffer.seek(0)
-        return buffer.getvalue()
-
-    if st.button("🚀 Finalizar e Enviar Atividade do Laboratório Virtual"):
-        if len(st.session_state.padroes_preparados) < 3:
-            st.error("Prepare pelo menos 3 soluções padrão antes de enviar!")
+    q1 = st.radio("1. O Nitrato de Prata ($\text{AgNO}_3$) pode ser considerado um Padrão Primário?", 
+                  ["Selecione...", "Sim, possui massa molar elevada e alta pureza sem necessidade de padronização.",
+                   "Não, é higroscópico, fotossensível e sua concentração real deve ser determinada por padronização."])
+                   
+    q2 = st.selectbox("2. Qual Padrão Primário deve ser utilizado para padronizar o $\text{AgNO}_3$?",
+                      ["Selecione...", "Biftalato de Potássio (KHP)", "Cloreto de Sódio (NaCl) previamente seco", "Carbonato de Sódio (Na2CO3)"])
+                      
+    q3 = st.selectbox("3. Qual o Indicador correto para a Titulação de Precipitação pelo Método de Mohr?",
+                      ["Selecione...", "Fenolftaleína", "Alaranjado de Metila", "Cromato de Potássio (K2CrO4)"])
+                      
+    if st.button("Validar Decisões Teóricas ➡️"):
+        if q1.startswith("Não") and "NaCl" in q2 and "K2CrO4" in q3:
+            st.success("🎯 Respostas perfeitas! O Método de Mohr utiliza NaCl como padrão e K2CrO4 como indicador.")
+            st.session_state.fase = 4
+            st.rerun()
         else:
-            pdf_bytes = gerar_pdf_simulador(
-                nome_aluno, matricula, pd.DataFrame(st.session_state.padroes_preparados),
-                abs_amostra_gabarito, slope_aluno, intercept_aluno, r2_aluno, conc_aluno, file_manuscrito
-            )
+            st.error("❌ Uma ou mais escolhas teóricas estão incorretas. Lembre-se: argentimetria direta exige NaCl e Cromato de Potássio!")
+
+# --- FASE 4: BANCADA DE TITULAÇÃO (MÉTODO DE MOHR) ---
+elif st.session_state.fase == 4:
+    st.header("🔬 FASE 4: Titulação Argentimétrica (Método de Mohr)")
+    st.write("Titule uma alíquota de **10.0 mL de NaCl 0.010 mol/L** + indicador $\text{K}_2\text{CrO}_4$ adicionando $\text{AgNO}_3$ da bureta:")
+    
+    col_t1, col_t2 = st.columns([1, 1])
+    
+    with col_t1:
+        st.subheader("Controle da Bureta ($\text{AgNO}_3$)")
+        c_b1, c_b2, c_b3 = st.columns(3)
+        with c_b1:
+            if st.button("➕ 1.0 mL"):
+                st.session_state.v_titulante_add = round(st.session_state.v_titulante_add + 1.0, 2)
+        with c_b2:
+            if st.button("➕ 0.1 mL"):
+                st.session_state.v_titulante_add = round(st.session_state.v_titulante_add + 0.1, 2)
+        with c_b3:
+            if st.button("🔄 Zerar Bureta"):
+                st.session_state.v_titulante_add = 0.0
+                
+        v_add = st.session_state.v_titulante_add
+        st.write(f"Volume adicionado: **{v_add:.2f} mL**")
+        
+        # Mudança de cor: Amarelo (antes da viragem) -> Vermelho-Tijolo (precipitado Ag2CrO4)
+        delta = v_add - v_equiv_padronizacao
+        if delta < -0.2:
+            cor_sol = (240, 230, 80, 230) # Amarelo solução cromato
+            estado = "🟡 Solução Amarela Amarelada (Precipitado branco de AgCl formando)"
+        elif -0.2 <= delta <= 0.2:
+            cor_sol = (210, 100, 50, 240) # Vermelho-Tijolo pálido (viragem!)
+            estado = "🧱 VIRAGEM! Precipitado Vermelho-Tijolo de Ag2CrO4 detectado!"
+        else:
+            cor_sol = (170, 30, 20, 255) # Excesso de Ag2CrO4
+            estado = "🔴 Excesso de Titulante (Supertitulado)"
             
-            os.makedirs("relatorios_lab", exist_ok=True)
-            pdf_path = f"relatorios_lab/{nome_aluno.replace(' ', '_')}_{matricula}.pdf"
+        st.info(f"**Aspecto Visual:** {estado}")
+
+    def desenhar_mohr(v_tit, cor_rgb):
+        img = Image.new("RGBA", (300, 350), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img)
+        # Bureta
+        draw.rectangle([135, 20, 165, 180], outline="black", width=2)
+        alt_liq = min(178, 30 + int(v_tit * 6))
+        draw.rectangle([137, alt_liq, 163, 178], fill=(200, 220, 240, 200))
+        draw.rectangle([130, 180, 170, 188], fill="gray")
+        # Erlenmeyer com o viragem de cor
+        erlen = [(150, 230), (110, 260), (70, 320), (230, 320), (190, 260)]
+        draw.polygon([(160, 280), (230, 280), (230, 320), (70, 320), (70, 280)], fill=cor_rgb)
+        draw.polygon(erlen, outline="black", width=2)
+        return img
+
+    with col_t2:
+        st.image(desenhar_mohr(v_add, cor_sol), caption="Viragem do Método de Mohr")
+        
+    if st.button("Registrar Volume de Viragem e Ir para Cálculos ➡️"):
+        if v_add > 0:
+            st.session_state.fase = 5
+            st.rerun()
+        else:
+            st.error("Adicione titulante da bureta para observar a viragem antes de prosseguir.")
+
+# --- FASE 5: REAÇÃO QUÍMICA, MANUSCRITO E SUBMISSÃO ---
+elif st.session_state.fase == 5:
+    st.header("📝 FASE 5: Equação Química e Resolução Manuscrita")
+    
+    st.write(f"Volume do ponto de equivalência lido: **{st.session_state.v_titulante_add} mL de $\text{AgNO}_3$**.")
+    st.write("Escreva no papel:")
+    st.markdown("1. A **equação química balanceada** da reação de padronização entre $\text{AgNO}_3$ e $\text{NaCl}$.\n2. A **equação da reação indicadora** (formação do precipitado vermelho de $\text{Ag}_2\text{CrO}_4$).\n3. O cálculo da **concentração real exata** da solução de $\text{AgNO}_3$.")
+    
+    file_manuscrito = st.file_uploader("Upload da foto do manuscrito:", type=["jpg", "jpeg", "png", "heic"])
+    
+    if file_manuscrito:
+        st.image(Image.open(file_manuscrito), caption="Resolução Manuscrita", width=350)
+        
+        st.subheader("Transcrição dos Resultados Finais")
+        c1, c2 = st.columns(2)
+        with c1:
+            conc_real_aluno = st.number_input("Concentração Real Calculada de AgNO3 (mol/L):", format="%.5f")
+        with c2:
+            eq_aluno = st.text_input("Escreva a Equação Química Global (ex: AgNO3 + NaCl -> ...):")
+            
+        def gerar_pdf_jogo(nome, mat, m_pesada, v_viragem, conc_calc, file_script):
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+            elements = []
+            styles = getSampleStyleSheet()
+
+            elements.append(Paragraph("<b>Certificado de Conclusão - RPG Laboratório de Química Analítica</b>", styles['Title']))
+            elements.append(Spacer(1, 10))
+            info = f"<b>Aluno:</b> {nome}<br/><b>Matrícula:</b> {mat}<br/><b>Data:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            elements.append(Paragraph(info, styles['Normal']))
+            elements.append(Spacer(1, 12))
+
+            resumo = f"""
+            <b>Massa Pesada na Balança:</b> {m_pesada} g<br/>
+            <b>Método Escolhido:</b> Argentimetria / Método de Mohr (NaCl + K<sub>2</sub>CrO<sub>4</sub>)<br/>
+            <b>Volume no Ponto de Equivalência:</b> {v_viragem} mL<br/>
+            <b>Concentração Real Determinada:</b> {conc_calc} mol/L
+            """
+            elements.append(Paragraph(resumo, styles['Normal']))
+            elements.append(Spacer(1, 12))
+
+            img_m = Image.open(file_script).convert("RGB")
+            img_m.thumbnail((400, 400))
+            temp_p = f"temp_rpg_{mat}.jpg"
+            img_m.save(temp_p)
+            elements.append(RLImage(temp_p, width=320, height=320))
+
+            doc.build(elements)
+            if os.path.exists(temp_p):
+                os.remove(temp_p)
+            buffer.seek(0)
+            return buffer.getvalue()
+
+        if st.button("🏆 Finalizar Missão e Enviar Atividade"):
+            pdf_bytes = gerar_pdf_jogo(nome_aluno, matricula, st.session_state.massa_pesada, st.session_state.v_titulante_add, conc_real_aluno, file_manuscrito)
+            
+            os.makedirs("relatorios_rpg", exist_ok=True)
+            pdf_path = f"relatorios_rpg/{nome_aluno.replace(' ', '_')}_{matricula}.pdf"
             with open(pdf_path, "wb") as f:
                 f.write(pdf_bytes)
 
@@ -341,16 +275,13 @@ if file_manuscrito:
                 "Nome": nome_aluno.strip().title(),
                 "Matricula": matricula,
                 "DataEnvio": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                "Abs_Amostra": abs_amostra_gabarito,
-                "Conc_Real_Gabarito": conc_amostra_gabarito,
-                "Slope_Aluno": slope_aluno,
-                "Intercept_Aluno": intercept_aluno,
-                "R2_Aluno": r2_aluno,
-                "Conc_Aluno": conc_aluno,
+                "Massa_Pesada": st.session_state.massa_pesada,
+                "V_Viragem": st.session_state.v_titulante_add,
+                "Conc_Real_Aluno": conc_real_aluno,
                 "PDF": pdf_path
             }
 
-            csv_file = "respostas_lab_virtual.csv"
+            csv_file = "respostas_rpg_quimica.csv"
             if os.path.exists(csv_file):
                 df = pd.read_csv(csv_file)
                 df = pd.concat([df, pd.DataFrame([registro])], ignore_index=True)
@@ -358,33 +289,26 @@ if file_manuscrito:
                 df = pd.DataFrame([registro])
 
             df.sort_values(by="Nome", ascending=True).to_csv(csv_file, index=False)
-            st.success("🎉 Atividade do Laboratório Virtual enviada com sucesso!")
+            st.success("🎉 Parabéns! Você concluiu a missão do laboratório com sucesso! O relatório PDF foi gerado.")
 
 # --- PAINEL DO PROFESSOR ---
 st.sidebar.write("---")
 if st.sidebar.checkbox("🔒 Acesso do Professor"):
     senha = st.sidebar.text_input("Senha de Acesso:", type="password")
     if senha == "prof123":
-        st.header("📊 Painel do Professor - Respostas do Laboratório")
-        
-        csv_file = "respostas_lab_virtual.csv"
+        st.header("📊 Painel do Professor - Respostas RPG")
+        csv_file = "respostas_rpg_quimica.csv"
         if os.path.exists(csv_file):
             df_prof = pd.read_csv(csv_file)
             st.dataframe(df_prof)
-            
             c_d1, c_d2 = st.columns(2)
             with c_d1:
-                csv_data = df_prof.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Baixar Tabela CSV", csv_data, "respostas_lab.csv", "text/csv")
+                st.download_button("📥 Baixar Tabela CSV", df_prof.to_csv(index=False).encode('utf-8'), "respostas_rpg.csv", "text/csv")
             with c_d2:
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w") as zf:
-                    for root, dirs, files in os.walk("relatorios_lab"):
+                zip_b = io.BytesIO()
+                with zipfile.ZipFile(zip_b, "w") as zf:
+                    for root, dirs, files in os.walk("relatorios_rpg"):
                         for file in files:
                             zf.write(os.path.join(root, file), file)
-                zip_buffer.seek(0)
-                st.download_button("📦 Baixar Todos os PDFs (ZIP)", zip_buffer, "relatorios_lab.zip", "application/zip")
-        else:
-            st.info("Nenhum envio registrado.")
-    elif senha:
-        st.sidebar.error("Senha incorreta.")
+                zip_b.seek(0)
+                st.download_button("📦 Baixar Relatórios em ZIP", zip_b, "relatorios_rpg.zip", "application/zip")
