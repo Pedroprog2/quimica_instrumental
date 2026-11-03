@@ -119,11 +119,11 @@ v_equiv_padronizacao = round((10.0 * 0.010) / conc_alvo_agno3, 2)
 # --- FASE 1: O DESAFIO DO DIA ---
 if st.session_state.fase == 1:
     st.header("📋 FASE 1: A Missão Analítica")
-    st.info(f"""
+    st.info(rf"""
     **Desafio de Laboratório:**
-    Você precisa preparar exatamente **{vol_solucao_preparar} mL** de uma solução de Nitrato de Prata ($\text{AgNO}_3$) com concentração aproximada de **{conc_alvo_agno3} mol/L**.
+    Você precisa preparar exatamente **{vol_solucao_preparar} mL** de uma solução de Nitrato de Prata ($\text{{AgNO}}_3$) com concentração aproximada de **{conc_alvo_agno3} mol/L**.
     
-    *Massa Molar do $\text{AgNO}_3$ = {MM_AgNO3} g/mol*
+    *Massa Molar do $\text{{AgNO}}_3$ = {MM_AgNO3} g/mol*
     """)
     
     massa_calc = st.number_input("Digite a massa (em gramas) que você deve pesar na balança analítica:", format="%.4f")
@@ -175,7 +175,7 @@ elif st.session_state.fase == 3:
     st.header("🧠 FASE 3: Tomada de Decisão Analítica")
     st.write("Responda às questões técnicas sobre o comportamento do reagente para prosseguir:")
     
-    q1 = st.radio("1. O Nitrato de Prata ($\text{AgNO}_3$) pode ser considerado um Padrão Primário?", 
+    q1 = st.radio("1. O Nitrato de Prata (AgNO₃) pode ser considerado um Padrão Primário?", 
                   ["Selecione...", "Sim, possui massa molar elevada e alta pureza sem necessidade de padronização.",
                    "Não, é higroscópico, fotossensível e sua concentração real deve ser determinada por padronização."])
                    
@@ -196,7 +196,7 @@ elif st.session_state.fase == 3:
 # --- FASE 4: TITULAÇÃO ---
 elif st.session_state.fase == 4:
     st.header("🔬 FASE 4: Titulação Argentimétrica (Método de Mohr)")
-    st.write("Titule uma alíquota de **10.0 mL de NaCl 0.010 mol/L** + indicador $\text{K}_2\text{CrO}_4$ adicionando $\text{AgNO}_3$ da bureta:")
+    st.write("Titule uma alíquota de **10.0 mL de NaCl 0.010 mol/L** + indicador Cromato de Potássio adicionando solução de Nitrato de Prata da bureta:")
     
     col_t1, col_t2 = st.columns([1, 1])
     
