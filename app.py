@@ -21,7 +21,7 @@ from reportlab.lib import colors
 
 st.set_page_config(page_title="RPG Laboratório: Padronização de AgNO3", layout="wide")
 
-st.title("🧪 RPG Analítico: Preparo e Padronização de $\text{AgNO}_3$")
+st.title("🧪 RPG Analítico: Preparo e Padronização de $\text{{AgNO}}_3$")
 st.write("Avance pelas fases do laboratório tomando decisões analíticas corretas, pesando na balança e titulando a solução.")
 
 # --- INICIALIZAÇÃO SEGURA DO SESSION STATE (EVITA NameError) ---
